@@ -14,7 +14,7 @@ provider "kubernetes" {
 }
 
 module "vm" {
-  source = "../../../kubernetes"
+  source = "../../../kubernetes/basic"
 
   kubeconfig_path = var.kubeconfig_path
 

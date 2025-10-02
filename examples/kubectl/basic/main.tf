@@ -14,7 +14,7 @@ provider "kubectl" {
 }
 
 module "vm" {
-  source = "../../../kubectl"
+  source = "../../../kubectl/basic"
 
   kubeconfig_path = var.kubeconfig_path
 

@@ -201,7 +201,7 @@ locals {
 
 module "vms" {
   for_each = local.vms
-  source   = "../../../kubectl"
+  source   = "../../../kubectl/basic"
 
   kubeconfig_path = var.kubeconfig_path
 

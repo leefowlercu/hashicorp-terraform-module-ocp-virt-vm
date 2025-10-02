@@ -1,0 +1,35 @@
+#cloud-config
+write_files:
+  - path: /etc/vault.d/vault-agent.hcl
+    permissions: '0640'
+    owner: vault:vault
+    content: |
+      vault {
+        address = "${vault_addr}"
+        %{ if vault_namespace != "" }namespace = "${vault_namespace}"%{ endif }
+      }
+
+      auto_auth {
+        method {
+          type = "${vault_auth_method}"
+
+          config = {
+            role = "${vault_role}"
+          }
+        }
+
+        sink {
+          type = "file"
+          config = {
+            path = "/var/run/vault/token"
+            mode = 0640
+          }
+        }
+      }
+
+      ${vault_templates}
+
+runcmd:
+  - systemctl daemon-reload
+  - systemctl restart vault-agent.service
+  - systemctl status vault-agent.service

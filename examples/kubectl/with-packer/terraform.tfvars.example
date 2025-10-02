@@ -1,0 +1,45 @@
+# Kubernetes Authentication
+kubeconfig_path = "~/.kube/config"
+
+# Packer Configuration - RHEL 10
+packer_enabled        = true
+rhel10_image_url      = "https://access.redhat.com/downloads/content/rhel-10-kvm-guest-image.qcow2"
+rhel10_image_checksum = "sha256:REPLACE_WITH_ACTUAL_CHECKSUM"
+
+# Optional: Red Hat subscription for package updates during build
+# rhel_subscription_username = "your-redhat-username"
+# rhel_subscription_password = "your-redhat-password"
+
+# Vault Configuration
+vault_version     = "1.15.0"
+vault_addr        = "https://vault.example.com:8200"
+vault_namespace   = ""  # Leave empty for Vault OSS
+vault_auth_method = "kubernetes"
+vault_role        = "my-app-role"
+
+# Example Vault secrets configuration
+vault_secrets_config = <<-EOT
+template {
+  source      = "/etc/vault.d/templates/database.tpl"
+  destination = "/etc/myapp/database.conf"
+}
+
+template {
+  source      = "/etc/vault.d/templates/api-key.tpl"
+  destination = "/etc/myapp/api-key.txt"
+}
+EOT
+
+# Container Registry Configuration
+registry_url      = "quay.io"
+registry_username = "your-registry-username"
+registry_password = "your-registry-password"
+image_name        = "myorg/rhel10-vault-agent"
+image_tag         = "v1.0.0"
+
+# VM Configuration
+vm_name      = "vault-agent-vm"
+vm_namespace = "kubevirt-tf-module-test"
+vm_running   = true
+vm_cpu_cores = 2
+vm_memory    = "4Gi"

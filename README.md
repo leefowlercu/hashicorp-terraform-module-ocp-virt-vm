@@ -4,12 +4,18 @@ Terraform modules for managing KubeVirt VirtualMachines on Red Hat OpenShift clu
 
 ## Overview
 
-This repository provides two Terraform module implementations for deploying and managing KubeVirt VirtualMachines:
+This repository provides Terraform modules for deploying and managing KubeVirt VirtualMachines:
 
-- **kubectl/** - Uses the `gavinbunney/kubectl` provider (Recommended)
-- **kubernetes/** - Uses the `hashicorp/kubernetes` provider
+## Available Modules
 
-Both modules provide identical functionality and accept the same input variables, allowing you to choose the provider that best fits your requirements.
+### kubectl Provider Modules (Recommended)
+- **kubectl/basic/** - Basic VM deployment using `gavinbunney/kubectl` provider
+- **kubectl/with-packer/** - VM deployment with custom RHEL 10 images built by Packer with pre-installed Vault Agent
+
+### kubernetes Provider Modules
+- **kubernetes/basic/** - Basic VM deployment using `hashicorp/kubernetes` provider
+
+The basic modules provide identical functionality and accept the same input variables, allowing you to choose the provider that best fits your requirements.
 
 ## Quick Start
 
@@ -17,7 +23,7 @@ Both modules provide identical functionality and accept the same input variables
 
 ```hcl
 module "vm" {
-  source = "path/to/kubectl"
+  source = "path/to/kubectl/basic"
 
   kubeconfig_path = "~/.kube/config"
 
@@ -41,7 +47,7 @@ module "vm" {
 
 ```hcl
 module "vm" {
-  source = "path/to/kubernetes"
+  source = "path/to/kubernetes/basic"
 
   kubeconfig_path = "~/.kube/config"
 
@@ -61,35 +67,53 @@ module "vm" {
 
 ```
 .
-├── kubectl/                      # kubectl provider module (Recommended)
-│   ├── main.tf
-│   ├── variables.tf
-│   ├── outputs.tf
-│   ├── providers.tf
-│   ├── terraform.tf
-│   ├── data.tf
-│   ├── locals.tf
-│   └── USAGE.md
-├── kubernetes/                   # kubernetes provider module
-│   ├── main.tf
-│   ├── variables.tf
-│   ├── outputs.tf
-│   ├── providers.tf
-│   ├── terraform.tf
-│   ├── data.tf
-│   ├── locals.tf
-│   └── USAGE.md
+├── kubectl/
+│   ├── basic/                    # Basic kubectl provider module (Recommended)
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   ├── providers.tf
+│   │   ├── terraform.tf
+│   │   ├── data.tf
+│   │   ├── locals.tf
+│   │   └── USAGE.md
+│   └── with-packer/              # kubectl + Packer + Vault Agent module
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── outputs.tf
+│       ├── packer/
+│       │   ├── rhel10.pkr.hcl
+│       │   ├── scripts/
+│       │   └── files/
+│       └── USAGE.md
+├── kubernetes/
+│   └── basic/                    # Basic kubernetes provider module
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── outputs.tf
+│       ├── providers.tf
+│       ├── terraform.tf
+│       ├── data.tf
+│       ├── locals.tf
+│       └── USAGE.md
 └── examples/
-    ├── kubectl/basic/            # kubectl provider example
-    │   ├── main.tf
-    │   ├── variables.tf
-    │   ├── terraform.tfvars.example
-    │   └── USAGE.md
-    └── kubernetes/basic/         # kubernetes provider example
-        ├── main.tf
-        ├── variables.tf
-        ├── terraform.tfvars.example
-        └── USAGE.md
+    ├── kubectl/
+    │   ├── basic/                # kubectl basic example
+    │   │   ├── main.tf
+    │   │   ├── variables.tf
+    │   │   ├── terraform.tfvars.example
+    │   │   └── USAGE.md
+    │   └── with-packer/          # kubectl + Packer example
+    │       ├── main.tf
+    │       ├── variables.tf
+    │       ├── terraform.tfvars.example
+    │       └── USAGE.md
+    └── kubernetes/
+        └── basic/                # kubernetes basic example
+            ├── main.tf
+            ├── variables.tf
+            ├── terraform.tfvars.example
+            └── USAGE.md
 ```
 
 ## Requirements
@@ -169,13 +193,15 @@ The kubectl provider module offers several advantages:
 
 Comprehensive documentation is available for each module:
 
-- [kubectl Module Documentation](kubectl/USAGE.md) - **Recommended**
-- [kubernetes Module Documentation](kubernetes/USAGE.md)
+### Module Documentation
+- [kubectl/basic Module](kubectl/basic/USAGE.md) - **Recommended**
+- [kubectl/with-packer Module](kubectl/with-packer/USAGE.md) - Custom RHEL 10 + Vault Agent
+- [kubernetes/basic Module](kubernetes/basic/USAGE.md)
 
-Example usage documentation:
-
-- [kubectl Example](examples/kubectl/basic/USAGE.md)
-- [kubernetes Example](examples/kubernetes/basic/USAGE.md)
+### Example Documentation
+- [kubectl/basic Example](examples/kubectl/basic/USAGE.md)
+- [kubectl/with-packer Example](examples/kubectl/with-packer/USAGE.md)
+- [kubernetes/basic Example](examples/kubernetes/basic/USAGE.md)
 
 ## Usage Examples
 
@@ -183,7 +209,7 @@ Example usage documentation:
 
 ```hcl
 module "vm" {
-  source = "./kubectl"
+  source = "./kubectl/basic"
 
   kubeconfig_path = "~/.kube/config"
 
@@ -202,7 +228,7 @@ module "vm" {
 
 ```hcl
 module "vm" {
-  source = "./kubectl"
+  source = "./kubectl/basic"
 
   kubeconfig_path = "~/.kube/config"
 
@@ -223,7 +249,7 @@ module "vm" {
 
 ```hcl
 module "vm" {
-  source = "./kubectl"
+  source = "./kubectl/basic"
 
   kubeconfig_path = "~/.kube/config"
 
@@ -273,7 +299,7 @@ locals {
 
 module "vms" {
   for_each = local.vms
-  source   = "./kubectl"
+  source   = "./kubectl/basic"
 
   kubeconfig_path = "~/.kube/config"
 
@@ -289,6 +315,63 @@ module "vms" {
   vm_labels = {
     role        = each.key
     environment = "production"
+  }
+}
+```
+
+### VM with Custom RHEL 10 Image and Vault Agent
+
+```hcl
+module "vault_vm" {
+  source = "./kubectl/with-packer"
+
+  # Kubernetes authentication
+  kubeconfig_path = "~/.kube/config"
+
+  # Packer configuration - RHEL 10
+  rhel10_image_url      = "https://access.redhat.com/downloads/rhel-10-kvm-guest-image.qcow2"
+  rhel10_image_checksum = "sha256:abc123..."
+
+  # Optional: RHEL subscription for updates during build
+  rhel_subscription_username = var.rhel_username
+  rhel_subscription_password = var.rhel_password
+
+  # Vault configuration
+  vault_version     = "1.15.0"
+  vault_addr        = "https://vault.example.com:8200"
+  vault_auth_method = "kubernetes"
+  vault_role        = "my-app-role"
+
+  # Vault secrets configuration
+  vault_secrets_config = <<-EOT
+    template {
+      source      = "/etc/vault.d/templates/database.tpl"
+      destination = "/etc/myapp/database.conf"
+    }
+
+    template {
+      source      = "/etc/vault.d/templates/api-key.tpl"
+      destination = "/etc/myapp/api-key.txt"
+    }
+  EOT
+
+  # Container registry configuration
+  registry_url      = "quay.io"
+  registry_username = var.registry_username
+  registry_password = var.registry_password
+  image_name        = "myorg/rhel10-vault-agent"
+  image_tag         = "v1.0.0"
+
+  # VM configuration
+  vm_name      = "vault-agent-vm"
+  vm_namespace = "virtualization"
+  vm_cpu_cores = 2
+  vm_memory    = "4Gi"
+
+  vm_labels = {
+    environment = "production"
+    managed-by  = "terraform"
+    component   = "vault-agent"
   }
 }
 ```
