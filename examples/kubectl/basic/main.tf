@@ -2,19 +2,19 @@ terraform {
   required_version = ">= 1.0"
 
   required_providers {
-    kubernetes = {
-      source  = "hashicorp/kubernetes"
-      version = ">= 2.23.0"
+    kubectl = {
+      source  = "gavinbunney/kubectl"
+      version = ">= 1.14.0"
     }
   }
 }
 
-provider "kubernetes" {
+provider "kubectl" {
   config_path = var.kubeconfig_path
 }
 
 module "vm" {
-  source = "../.."
+  source = "../../../kubectl"
 
   kubeconfig_path = var.kubeconfig_path
 
@@ -25,8 +25,8 @@ module "vm" {
   vm_cpu_cores = var.vm_cpu_cores
   vm_memory    = var.vm_memory
 
-  vm_volume_type      = var.vm_volume_type
-  vm_container_image  = var.vm_container_image
+  vm_volume_type     = var.vm_volume_type
+  vm_container_image = var.vm_container_image
 
   vm_labels = {
     environment = "test"
@@ -34,7 +34,7 @@ module "vm" {
   }
 
   vm_annotations = {
-    description = "Example VM created by Terraform"
+    description = "Example VM created by Terraform with kubectl provider"
   }
 }
 

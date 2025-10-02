@@ -1,0 +1,11 @@
+kubeconfig_path = "~/.kube/config"
+
+vm_name      = "test-vm"
+vm_namespace = "ocp-virt-tf-module-test"
+vm_running   = true
+
+vm_cpu_cores = 1
+vm_memory    = "2Gi"
+
+vm_volume_type     = "containerDisk"
+vm_container_image = "quay.io/containerdisks/fedora:latest"
