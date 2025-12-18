@@ -1,228 +1,113 @@
 # OpenShift Virtualization Terraform Module
 
-Terraform modules for managing KubeVirt VirtualMachines on Red Hat OpenShift clusters with OpenShift Virtualization.
+Terraform modules for managing KubeVirt VirtualMachines on Red Hat OpenShift clusters.
+
+**Current Version**: N/A
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [Available Modules](#available-modules)
+- [Requirements](#requirements)
+- [Authentication](#authentication)
+- [Usage Examples](#usage-examples)
+- [Module Documentation](#module-documentation)
 
 ## Overview
 
-This repository provides Terraform modules for deploying and managing KubeVirt VirtualMachines:
+This repository provides Terraform modules for deploying and managing KubeVirt VirtualMachines on OpenShift clusters with OpenShift Virtualization installed. Three module implementations are available to suit different use cases:
 
-## Available Modules
+- **kubectl/basic** (Recommended) - Production-ready module using the `gavinbunney/kubectl` provider with YAML-based manifests and server-side apply. Provides clean state management and accurate drift detection.
 
-### kubectl Provider Modules (Recommended)
-- **kubectl/basic/** - Basic VM deployment using `gavinbunney/kubectl` provider
-- **kubectl/with-packer/** - VM deployment with custom RHEL 10 images built by Packer with pre-installed Vault Agent
+- **kubernetes/basic** (Legacy) - Alternative implementation using the `hashicorp/kubernetes` provider with HCL-based manifests. Has known state reconciliation issues with complex CRDs that cannot be resolved through configuration.
 
-### kubernetes Provider Modules
-- **kubernetes/basic/** - Basic VM deployment using `hashicorp/kubernetes` provider
-
-The basic modules provide similar functionality with a shared core variable interface. The kubernetes/basic module includes additional variables for DataVolume sourceRef support (pre-installed OS images). Choose the provider that best fits your requirements.
+- **kubectl/with-packer** (Advanced) - Extends kubectl/basic with Packer integration for building custom RHEL 10 images with Vault Agent pre-installed. Suitable for environments requiring secrets management integration.
 
 ## Quick Start
 
-### Using kubectl Provider (Recommended)
+### Prerequisites
 
-```hcl
-module "vm" {
-  source = "path/to/kubectl/basic"
+- Red Hat OpenShift cluster with OpenShift Virtualization operator installed
+- Terraform >= 1.0
+- kubectl or oc CLI configured with cluster access
 
-  kubeconfig_path = "~/.kube/config"
+### Using kubectl/basic (Recommended)
 
-  vm_name      = "my-vm"
-  vm_namespace = "virtualization"
-  vm_running   = true
+```bash
+# Verify OpenShift Virtualization is installed
+oc get csv -n openshift-cnv
 
-  vm_cpu_cores = 2
-  vm_memory    = "4Gi"
+# Create namespace for VMs
+oc create namespace virtualization
 
-  vm_volume_type     = "containerDisk"
-  vm_container_image = "quay.io/containerdisks/fedora:latest"
+# Copy the example configuration
+cp -r examples/kubectl/basic my-vm-config
+cd my-vm-config
 
-  vm_labels = {
-    environment = "production"
-  }
-}
+# Configure your variables
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your settings
+
+# Deploy
+terraform init
+terraform plan
+terraform apply
+
+# Verify
+oc get vm -n virtualization
+oc get vmi -n virtualization
 ```
 
-### Using kubernetes Provider
+## Available Modules
 
-```hcl
-module "vm" {
-  source = "path/to/kubernetes/basic"
-
-  kubeconfig_path = "~/.kube/config"
-
-  vm_name      = "my-vm"
-  vm_namespace = "virtualization"
-  vm_running   = true
-
-  vm_cpu_cores = 2
-  vm_memory    = "4Gi"
-
-  vm_volume_type     = "containerDisk"
-  vm_container_image = "quay.io/containerdisks/fedora:latest"
-}
-```
-
-## Repository Structure
-
-```
-.
-├── docs/
-│   └── kubernetes-provider-bug.md
-├── kubectl/
-│   ├── basic/                    # Basic kubectl provider module (Recommended)
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   ├── outputs.tf
-│   │   ├── providers.tf
-│   │   ├── terraform.tf
-│   │   ├── data.tf
-│   │   ├── locals.tf
-│   │   └── USAGE.md
-│   └── with-packer/              # kubectl + Packer + Vault Agent module
-│       ├── main.tf
-│       ├── variables.tf
-│       ├── outputs.tf
-│       ├── providers.tf
-│       ├── terraform.tf
-│       ├── data.tf
-│       ├── locals.tf
-│       ├── packer/
-│       │   ├── rhel10.pkr.hcl
-│       │   ├── Dockerfile.tpl
-│       │   ├── scripts/
-│       │   │   └── install-vault-agent.sh
-│       │   └── files/
-│       │       └── vault-agent.hcl.tpl
-│       ├── scripts/
-│       │   └── build-and-push.sh
-│       ├── templates/
-│       │   └── vault-agent-cloudinit.yaml.tftpl
-│       └── USAGE.md
-├── kubernetes/
-│   └── basic/                    # Basic kubernetes provider module
-│       ├── main.tf
-│       ├── variables.tf
-│       ├── outputs.tf
-│       ├── providers.tf
-│       ├── terraform.tf
-│       ├── data.tf
-│       ├── locals.tf
-│       └── USAGE.md
-└── examples/
-    ├── kubectl/
-    │   ├── basic/                # kubectl basic example
-    │   │   ├── main.tf
-    │   │   ├── variables.tf
-    │   │   ├── terraform.tfvars.example
-    │   │   └── USAGE.md
-    │   └── with-packer/          # kubectl + Packer example
-    │       ├── main.tf
-    │       ├── variables.tf
-    │       ├── terraform.tfvars.example
-    │       └── USAGE.md
-    └── kubernetes/
-        └── basic/                # kubernetes basic example
-            ├── main.tf
-            ├── variables.tf
-            ├── terraform.tfvars.example
-            └── USAGE.md
-```
+| Module | Provider | Status | Description |
+|--------|----------|--------|-------------|
+| [kubectl/basic](kubectl/basic/) | gavinbunney/kubectl | Recommended | Basic VM deployment with clean state management |
+| [kubernetes/basic](kubernetes/basic/) | hashicorp/kubernetes | Legacy | Alternative with known state reconciliation issues |
+| [kubectl/with-packer](kubectl/with-packer/) | kubectl + null | Advanced | Custom RHEL 10 images with Vault Agent |
 
 ## Requirements
 
-### Cluster Requirements
-
-- Red Hat OpenShift cluster (ROSA, ARO, OCP on-prem, etc.)
-- OpenShift Virtualization operator installed
-- KubeVirt CRDs available in the cluster
-
-### Terraform Requirements
+### Terraform
 
 | Name | Version |
 |------|---------|
 | terraform | >= 1.0 |
 
-### Provider Requirements
+### Providers
 
-#### kubectl Module
-- kubectl provider >= 1.14.0
-- kubernetes provider >= 2.23.0
+**kubectl modules:**
+- kubectl >= 1.14.0
+- kubernetes >= 2.23.0
 
-#### kubernetes Module
-- kubernetes provider ~> 3.0.1
+**kubernetes module:**
+- kubernetes ~> 3.0.1
 
-#### kubectl/with-packer Module
-- kubectl provider >= 1.14.0
-- kubernetes provider >= 2.23.0
-- null provider >= 3.0
+**kubectl/with-packer module (additional):**
+- null >= 3.0
+
+### Cluster Requirements
+
+- Red Hat OpenShift cluster (ROSA, ARO, OCP on-prem)
+- OpenShift Virtualization operator installed
+- KubeVirt CRDs available
+- Appropriate storage classes configured (e.g., gp3-csi for AWS)
 
 ## Authentication
 
-Both modules support two authentication methods:
+### Kubeconfig File
 
-### kubeconfig File
 ```hcl
 kubeconfig_path = "~/.kube/config"
 ```
 
-### Token Authentication
+### Token Authentication (CI/CD)
+
 ```hcl
 cluster_host  = "https://api.cluster.example.com:6443"
 cluster_token = var.openshift_token
 ```
-
-## Features
-
-- Support for multiple volume types:
-  - containerDisk - Ephemeral container-based storage
-  - dataVolume - CDI-managed persistent storage with HTTP sources or sourceRef (pre-installed OS images)
-  - persistentVolumeClaim - Existing PVC reference
-- DataVolume sourceRef support for pre-installed OS images (kubernetes/basic module only):
-  - fedora, rhel9, rhel8, centos-stream9, centos-stream10 from openshift-virtualization-os-images
-- Configurable CPU cores and memory
-- Cloud-init support for VM initialization
-- Custom labels and annotations
-- Network configuration (model, interface)
-- VM lifecycle management (start/stop/delete)
-- Namespace validation
-
-## Module Comparison
-
-| Feature | kubernetes Module | kubectl Module |
-|---------|------------------|----------------|
-| State Management | ⚠️ Type validation workarounds | ✅ Clean |
-| Drift Detection | ⚠️ May show inconsistencies | ✅ Accurate |
-| Complex CRDs | ⚠️ Requires computed_fields | ✅ Native support |
-| Resource Definition | HCL object | YAML string |
-| Server-Side Apply | Limited | ✅ Full support |
-| DataVolume sourceRef | ✅ Supported | ❌ Not available |
-| Production Ready | ⚠️ With workarounds | ✅ Yes |
-| Recommended | No | **Yes** |
-
-### Why kubectl Module is Recommended
-
-The kubectl provider module offers several advantages:
-
-- **Clean State Management**: No type validation errors or inconsistent state issues
-- **Accurate Drift Detection**: Correctly identifies actual changes without false positives
-- **Server-Side Apply**: Full support for Kubernetes server-side apply
-- **YAML Native**: Works with raw YAML manifests, matching `kubectl apply` behavior
-- **Better CRD Support**: Handles complex Custom Resource Definitions without workarounds
-
-## Documentation
-
-Comprehensive documentation is available for each module:
-
-### Module Documentation
-- [kubectl/basic Module](kubectl/basic/USAGE.md) - **Recommended**
-- [kubectl/with-packer Module](kubectl/with-packer/USAGE.md) - Custom RHEL 10 + Vault Agent
-- [kubernetes/basic Module](kubernetes/basic/USAGE.md)
-
-### Example Documentation
-- [kubectl/basic Example](examples/kubectl/basic/USAGE.md)
-- [kubectl/with-packer Example](examples/kubectl/with-packer/USAGE.md)
-- [kubernetes/basic Example](examples/kubernetes/basic/USAGE.md)
 
 ## Usage Examples
 
@@ -236,6 +121,7 @@ module "vm" {
 
   vm_name      = "fedora-vm"
   vm_namespace = "virtualization"
+  vm_running   = true
 
   vm_cpu_cores = 2
   vm_memory    = "4Gi"
@@ -259,37 +145,12 @@ module "vm" {
   vm_cpu_cores = 2
   vm_memory    = "4Gi"
 
-  vm_volume_type            = "dataVolume"
-  vm_datavolume_source_http = "https://cloud.centos.org/centos/9-stream/x86_64/images/CentOS-Stream-GenericCloud-9-latest.x86_64.qcow2"
-  vm_datavolume_size        = "30Gi"
+  vm_volume_type              = "dataVolume"
+  vm_datavolume_source_http   = "https://cloud.centos.org/centos/9-stream/x86_64/images/CentOS-Stream-GenericCloud-9-latest.x86_64.qcow2"
+  vm_datavolume_size          = "30Gi"
   vm_datavolume_storage_class = "gp3-csi"
 }
 ```
-
-### VM with DataVolume from Pre-installed OS Image (sourceRef)
-
-This example uses the kubernetes/basic module with sourceRef to leverage pre-installed OS images available in the openshift-virtualization-os-images namespace.
-
-```hcl
-module "vm" {
-  source = "./kubernetes/basic"
-
-  kubeconfig_path = "~/.kube/config"
-
-  vm_name      = "fedora-vm"
-  vm_namespace = "virtualization"
-
-  vm_cpu_cores = 2
-  vm_memory    = "4Gi"
-
-  vm_volume_type                   = "dataVolume"
-  vm_datavolume_source_ref_name    = "fedora"
-  vm_datavolume_source_ref_namespace = "openshift-virtualization-os-images"
-  vm_datavolume_size               = "35Gi"
-}
-```
-
-Available DataSource names include: `fedora`, `rhel9`, `rhel8`, `centos-stream9`, `centos-stream10`.
 
 ### VM with Cloud-Init
 
@@ -325,7 +186,7 @@ module "vm" {
 }
 ```
 
-### Managing Multiple VMs
+### Multiple VMs with for_each
 
 ```hcl
 locals {
@@ -365,109 +226,20 @@ module "vms" {
 }
 ```
 
-### VM with Custom RHEL 10 Image and Vault Agent
+## Module Documentation
 
-```hcl
-module "vault_vm" {
-  source = "./kubectl/with-packer"
+### Module Reference
 
-  # Kubernetes authentication
-  kubeconfig_path = "~/.kube/config"
+- [kubectl/basic Module](kubectl/basic/USAGE.md) - Recommended
+- [kubectl/with-packer Module](kubectl/with-packer/USAGE.md) - Advanced
+- [kubernetes/basic Module](kubernetes/basic/USAGE.md) - Legacy
 
-  # Packer configuration - RHEL 10
-  rhel10_image_url      = "https://access.redhat.com/downloads/rhel-10-kvm-guest-image.qcow2"
-  rhel10_image_checksum = "sha256:abc123..."
+### Example Reference
 
-  # Optional: RHEL subscription for updates during build
-  rhel_subscription_username = var.rhel_username
-  rhel_subscription_password = var.rhel_password
+- [kubectl/basic Example](examples/kubectl/basic/USAGE.md)
+- [kubectl/with-packer Example](examples/kubectl/with-packer/USAGE.md)
+- [kubernetes/basic Example](examples/kubernetes/basic/USAGE.md)
 
-  # Vault configuration
-  vault_version     = "1.15.0"
-  vault_addr        = "https://vault.example.com:8200"
-  vault_auth_method = "kubernetes"
-  vault_role        = "my-app-role"
+### Additional Documentation
 
-  # Vault secrets configuration
-  vault_secrets_config = <<-EOT
-    template {
-      source      = "/etc/vault.d/templates/database.tpl"
-      destination = "/etc/myapp/database.conf"
-    }
-
-    template {
-      source      = "/etc/vault.d/templates/api-key.tpl"
-      destination = "/etc/myapp/api-key.txt"
-    }
-  EOT
-
-  # Container registry configuration
-  registry_url      = "quay.io"
-  registry_username = var.registry_username
-  registry_password = var.registry_password
-  image_name        = "myorg/rhel10-vault-agent"
-  image_tag         = "v1.0.0"
-
-  # VM configuration
-  vm_name      = "vault-agent-vm"
-  vm_namespace = "virtualization"
-  vm_cpu_cores = 2
-  vm_memory    = "4Gi"
-
-  vm_labels = {
-    environment = "production"
-    managed-by  = "terraform"
-    component   = "vault-agent"
-  }
-}
-```
-
-## Getting Started
-
-1. Ensure OpenShift Virtualization is installed on your cluster:
-   ```bash
-   oc get csv -n openshift-cnv
-   ```
-
-2. Create a namespace for your VMs:
-   ```bash
-   oc create namespace virtualization
-   ```
-
-3. Copy one of the examples:
-   ```bash
-   cp -r examples/kubectl/basic my-vm-config
-   cd my-vm-config
-   ```
-
-4. Configure your variables:
-   ```bash
-   cp terraform.tfvars.example terraform.tfvars
-   # Edit terraform.tfvars with your configuration
-   ```
-
-5. Initialize and apply:
-   ```bash
-   terraform init
-   terraform plan
-   terraform apply
-   ```
-
-6. Verify the VM:
-   ```bash
-   oc get vm -n virtualization
-   oc get vmi -n virtualization
-   ```
-
-## Outputs
-
-Both modules provide the following outputs:
-
-| Name | Description |
-|------|-------------|
-| vm_name | Name of the virtual machine |
-| vm_namespace | Namespace of the virtual machine |
-| vm_uid | UID of the virtual machine |
-| vm_resource_version | Resource version of the virtual machine |
-| vm_status | Status of the virtual machine |
-| vm_object | Full virtual machine manifest |
+- [kubernetes Provider Bug Report](docs/kubernetes-provider-bug.md) - Detailed analysis of the kubernetes_manifest state reconciliation issue
