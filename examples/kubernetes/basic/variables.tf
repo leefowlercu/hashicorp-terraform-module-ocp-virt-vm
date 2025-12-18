@@ -37,11 +37,23 @@ variable "vm_memory" {
 variable "vm_volume_type" {
   description = "Volume type: containerDisk, dataVolume, or persistentVolumeClaim"
   type        = string
-  default     = "containerDisk"
+  default     = "dataVolume"
 }
 
 variable "vm_container_image" {
   description = "Container image for containerDisk volume type"
   type        = string
-  default     = "quay.io/containerdisks/fedora:latest"
+  default     = null
+}
+
+variable "vm_datavolume_source_ref_name" {
+  description = "Name of DataSource to use (e.g., 'fedora', 'rhel9', 'centos-stream9')"
+  type        = string
+  default     = "fedora"
+}
+
+variable "vm_datavolume_size" {
+  description = "Size of the DataVolume"
+  type        = string
+  default     = "10Gi"
 }

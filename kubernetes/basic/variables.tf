@@ -76,9 +76,21 @@ variable "vm_container_image" {
 }
 
 variable "vm_datavolume_source_http" {
-  description = "HTTP URL source for DataVolume"
+  description = "HTTP URL source for DataVolume. Required if vm_volume_type is 'dataVolume' and vm_datavolume_source_ref_name is not set."
   type        = string
   default     = null
+}
+
+variable "vm_datavolume_source_ref_name" {
+  description = "Name of DataSource to use as sourceRef (e.g., 'fedora', 'rhel9'). Required if vm_volume_type is 'dataVolume' and vm_datavolume_source_http is not set."
+  type        = string
+  default     = null
+}
+
+variable "vm_datavolume_source_ref_namespace" {
+  description = "Namespace of DataSource (default: openshift-virtualization-os-images)"
+  type        = string
+  default     = "openshift-virtualization-os-images"
 }
 
 variable "vm_datavolume_size" {
@@ -97,12 +109,6 @@ variable "vm_pvc_name" {
   description = "Name of existing PVC when using persistentVolumeClaim volume type"
   type        = string
   default     = null
-}
-
-variable "vm_network_name" {
-  description = "Network name for the virtual machine (pod network uses 'default')"
-  type        = string
-  default     = "default"
 }
 
 variable "vm_network_interface_model" {

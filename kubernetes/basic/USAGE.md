@@ -11,20 +11,20 @@ This module uses the `kubernetes_manifest` resource to deploy and manage KubeVir
 | Name | Version |
 |------|---------|
 | terraform | >= 1.0 |
-| kubernetes | >= 2.23.0 |
+| kubernetes | >= 3.0.1 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
-| kubernetes | >= 2.23.0 |
+| kubernetes | >= 3.0.1 |
 
 ## Resources
 
 | Name | Type |
 |------|------|
 | kubernetes_manifest.virtual_machine | resource |
-| kubernetes_namespace.vm_namespace | data source |
+| kubernetes_namespace_v1.vm_namespace | data source |
 
 ## Module Usage
 
@@ -211,13 +211,60 @@ module "vm" {
 
 ### State Reconciliation Error
 
-The `kubernetes_manifest` resource may produce the following error after successfully creating resources:
+The `kubernetes_manifest` resource produces the following error after successfully creating resources:
 
 ```
 Error: Provider produced inconsistent result after apply
+
+When applying changes to module.vm.kubernetes_manifest.virtual_machine,
+provider "module.vm.provider["registry.terraform.io/hashicorp/kubernetes"]"
+produced an unexpected new value: .object: wrong final value type:
+incorrect object attributes.
+
+This is a bug in the provider, which should be reported in the provider's
+own issue tracker.
 ```
 
-**This is a cosmetic error.** The VirtualMachine is created successfully, but Terraform's type validation has difficulty reconciling the complex KubeVirt CRD schema.
+#### Root Cause
+
+This error occurs due to a fundamental limitation in how the `kubernetes_manifest` resource validates complex CRD schemas:
+
+1. **HCL-to-CRD Type Validation**: The kubernetes provider converts HCL objects to Kubernetes resources and then validates the API server's response against the expected schema
+2. **API Server Enrichment**: The Kubernetes API server adds default values, metadata, and type conversions to the resource (e.g., converting empty objects `{}` to `null`, adding computed fields like `machine.type`)
+3. **Schema Mismatch**: The provider's type validator cannot reconcile these enrichments with the original HCL structure, especially for deeply nested CRDs like KubeVirt VirtualMachine
+
+#### What We Tested (October 2025)
+
+We performed comprehensive testing against a live OpenShift cluster with OpenShift Virtualization to determine if this issue could be resolved:
+
+**Test 1: Provider Version Upgrade**
+- Updated from `>= 2.23.0` to `~> 2.38.0`
+- Result: ❌ Error persists
+
+**Test 2: Simplified `computed_fields`**
+- Configuration: `["metadata.generation", "status"]` (minimal best practice)
+- Set `force_conflicts = true`
+- Removed `lifecycle { ignore_changes = [object] }`
+- Result: ❌ Error persists
+
+**Test 3: Extended `computed_fields`**
+- Added 40+ computed field paths covering all nested structures
+- Included `force_conflicts = true`
+- Re-added `lifecycle { ignore_changes = [object] }`
+- Result: ❌ Error persists
+
+**Test 4: kubectl Provider (Comparison)**
+- Same VM configuration using `kubectl_manifest` with `server_side_apply = true`
+- Result: ✅ Works perfectly, no errors, no drift detection
+
+#### Conclusion
+
+**The error cannot be resolved through configuration changes.** It is a fundamental limitation of the `kubernetes_manifest` resource when working with complex CRDs that have:
+- Deeply nested optional fields
+- Server-side type conversions
+- Extensive default value enrichment
+
+The VirtualMachine **is created successfully** in the cluster despite the Terraform error, but Terraform's state management is broken.
 
 ### Workaround
 
@@ -229,11 +276,17 @@ terraform import 'module.vm.kubernetes_manifest.virtual_machine' \
   "apiVersion=kubevirt.io/v1,kind=VirtualMachine,namespace=<namespace>,name=<vm-name>"
 ```
 
-3. Continue normal terraform operations
+3. Continue normal terraform operations (subsequent applies may still show the error)
 
-### Alternative
+### Recommended Solution
 
-For production use without state management issues, consider using the **kubectl provider version** of this module located in `../kubectl/`.
+**Use the kubectl provider version instead.** The `kubectl/basic` module uses the `gavinbunney/kubectl` provider which:
+- Handles manifests as YAML strings (via `yamlencode()`)
+- Uses Server-Side Apply without HCL-to-CRD type validation
+- Has clean state management without false drift
+- Is production-ready for managing KubeVirt VirtualMachines
+
+See: `../kubectl/basic/` for the recommended implementation.
 
 ## Features
 

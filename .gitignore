@@ -39,7 +39,3 @@ terraform.rc
 # OS files
 .DS_Store
 Thumbs.db
-
-# Agent files
-CLAUDE.md
-AGENTS.md

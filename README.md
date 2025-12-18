@@ -15,7 +15,7 @@ This repository provides Terraform modules for deploying and managing KubeVirt V
 ### kubernetes Provider Modules
 - **kubernetes/basic/** - Basic VM deployment using `hashicorp/kubernetes` provider
 
-The basic modules provide identical functionality and accept the same input variables, allowing you to choose the provider that best fits your requirements.
+The basic modules provide similar functionality with a shared core variable interface. The kubernetes/basic module includes additional variables for DataVolume sourceRef support (pre-installed OS images). Choose the provider that best fits your requirements.
 
 ## Quick Start
 
@@ -67,6 +67,8 @@ module "vm" {
 
 ```
 .
+├── docs/
+│   └── kubernetes-provider-bug.md
 ├── kubectl/
 │   ├── basic/                    # Basic kubectl provider module (Recommended)
 │   │   ├── main.tf
@@ -81,10 +83,21 @@ module "vm" {
 │       ├── main.tf
 │       ├── variables.tf
 │       ├── outputs.tf
+│       ├── providers.tf
+│       ├── terraform.tf
+│       ├── data.tf
+│       ├── locals.tf
 │       ├── packer/
 │       │   ├── rhel10.pkr.hcl
+│       │   ├── Dockerfile.tpl
 │       │   ├── scripts/
+│       │   │   └── install-vault-agent.sh
 │       │   └── files/
+│       │       └── vault-agent.hcl.tpl
+│       ├── scripts/
+│       │   └── build-and-push.sh
+│       ├── templates/
+│       │   └── vault-agent-cloudinit.yaml.tftpl
 │       └── USAGE.md
 ├── kubernetes/
 │   └── basic/                    # Basic kubernetes provider module
@@ -137,7 +150,12 @@ module "vm" {
 - kubernetes provider >= 2.23.0
 
 #### kubernetes Module
+- kubernetes provider ~> 3.0.1
+
+#### kubectl/with-packer Module
+- kubectl provider >= 1.14.0
 - kubernetes provider >= 2.23.0
+- null provider >= 3.0
 
 ## Authentication
 
@@ -158,8 +176,10 @@ cluster_token = var.openshift_token
 
 - Support for multiple volume types:
   - containerDisk - Ephemeral container-based storage
-  - dataVolume - CDI-managed persistent storage with HTTP/Registry sources
+  - dataVolume - CDI-managed persistent storage with HTTP sources or sourceRef (pre-installed OS images)
   - persistentVolumeClaim - Existing PVC reference
+- DataVolume sourceRef support for pre-installed OS images (kubernetes/basic module only):
+  - fedora, rhel9, rhel8, centos-stream9, centos-stream10 from openshift-virtualization-os-images
 - Configurable CPU cores and memory
 - Cloud-init support for VM initialization
 - Custom labels and annotations
@@ -176,6 +196,7 @@ cluster_token = var.openshift_token
 | Complex CRDs | ⚠️ Requires computed_fields | ✅ Native support |
 | Resource Definition | HCL object | YAML string |
 | Server-Side Apply | Limited | ✅ Full support |
+| DataVolume sourceRef | ✅ Supported | ❌ Not available |
 | Production Ready | ⚠️ With workarounds | ✅ Yes |
 | Recommended | No | **Yes** |
 
@@ -244,6 +265,31 @@ module "vm" {
   vm_datavolume_storage_class = "gp3-csi"
 }
 ```
+
+### VM with DataVolume from Pre-installed OS Image (sourceRef)
+
+This example uses the kubernetes/basic module with sourceRef to leverage pre-installed OS images available in the openshift-virtualization-os-images namespace.
+
+```hcl
+module "vm" {
+  source = "./kubernetes/basic"
+
+  kubeconfig_path = "~/.kube/config"
+
+  vm_name      = "fedora-vm"
+  vm_namespace = "virtualization"
+
+  vm_cpu_cores = 2
+  vm_memory    = "4Gi"
+
+  vm_volume_type                   = "dataVolume"
+  vm_datavolume_source_ref_name    = "fedora"
+  vm_datavolume_source_ref_namespace = "openshift-virtualization-os-images"
+  vm_datavolume_size               = "35Gi"
+}
+```
+
+Available DataSource names include: `fedora`, `rhel9`, `rhel8`, `centos-stream9`, `centos-stream10`.
 
 ### VM with Cloud-Init
 

@@ -4,7 +4,7 @@ terraform {
   required_providers {
     kubernetes = {
       source  = "hashicorp/kubernetes"
-      version = ">= 2.23.0"
+      version = "~> 3.0"
     }
   }
 }
@@ -25,8 +25,10 @@ module "vm" {
   vm_cpu_cores = var.vm_cpu_cores
   vm_memory    = var.vm_memory
 
-  vm_volume_type      = var.vm_volume_type
-  vm_container_image  = var.vm_container_image
+  vm_volume_type                = var.vm_volume_type
+  vm_container_image            = var.vm_container_image
+  vm_datavolume_source_ref_name = var.vm_datavolume_source_ref_name
+  vm_datavolume_size            = var.vm_datavolume_size
 
   vm_labels = {
     environment = "test"
