@@ -878,24 +878,62 @@ Over **100 fields** added/modified by API server vs original HCL.
 
 ### GitHub Issues (hashicorp/terraform-provider-kubernetes)
 
-While researching, we found similar issues reported:
+This is a well-documented class of bugs with 15+ issues reporting the same "Provider produced inconsistent result after apply" error across various CRD types. No KubeVirt VirtualMachine-specific issue exists as of December 2025.
 
-1. **Issue #1945**: "computed_fields doesn't allow recalculation"
-   - Status: Closed as "not planned"
-   - Similar symptoms with controller-managed fields
+#### Primary Issues - Same Error Class
 
-2. **Issue #1751**: "Provider produced inconsistent result" with AWS ENIConfig CRD
-   - Resolved by fixing HCL structure, not applicable here
+| Issue | CRD Type | Status | Date | Key Finding |
+|-------|----------|--------|------|-------------|
+| [#1545](https://github.com/hashicorp/terraform-provider-kubernetes/issues/1545) | CRD (general) | Closed | Dec 2021 | Maintainer acknowledged "backlog item to improve UX" |
+| [#1418](https://github.com/hashicorp/terraform-provider-kubernetes/issues/1418) | PrometheusRules | Open | Oct 2021 | Exact same error message as this report |
+| [#1719](https://github.com/hashicorp/terraform-provider-kubernetes/issues/1719) | cert-manager | Closed | May 2022 | `[]` vs `null` type mismatch |
+| [#1726](https://github.com/hashicorp/terraform-provider-kubernetes/issues/1726) | IstioOperator | Closed | May 2022 | "attribute 'profile' is required" variant |
+| [#1530](https://github.com/hashicorp/terraform-provider-kubernetes/issues/1530) | cert-manager | Open | Jan 2022 | Duration format normalization (`240h` vs `240h0m0s`) |
+| [#1769](https://github.com/hashicorp/terraform-provider-kubernetes/issues/1769) | Karpenter | Closed | Jun 2022 | "new element has appeared" in requirements |
+| [#2185](https://github.com/hashicorp/terraform-provider-kubernetes/issues/2185) | ArgoCD | Open | Jul 2023 | Controller-added fields cause state mismatch |
+| [#2366](https://github.com/hashicorp/terraform-provider-kubernetes/issues/2366) | Karpenter | Closed | Dec 2023 | Same as #1769 |
+| [#2674](https://github.com/hashicorp/terraform-provider-kubernetes/issues/2674) | Karpenter EC2NodeClass | Open | Jan 2025 | `clusterDNS` list becomes null |
+| [#2722](https://github.com/hashicorp/terraform-provider-kubernetes/issues/2722) | DaemonSet | Open | May 2025 | Annotation drift on controller-managed field |
 
-3. **Multiple issues** with complex CRDs from various operators
+#### computed_fields Limitations
+
+| Issue | Problem | Resolution |
+|-------|---------|------------|
+| [#1945](https://github.com/hashicorp/terraform-provider-kubernetes/issues/1945) | computed_fields doesn't allow recalculation | Closed - not planned |
+| [#2068](https://github.com/hashicorp/terraform-provider-kubernetes/issues/2068) | computed_fields fails with `split()` for multi-part YAML | Open |
+| [#1591](https://github.com/hashicorp/terraform-provider-kubernetes/issues/1591) | Default computed_fields doesn't cover all metadata.annotations | Closed |
+
+#### KubeVirt-Specific History
+
+| Issue | Repository | Status | Finding |
+|-------|------------|--------|---------|
+| [#69](https://github.com/hashicorp/terraform-provider-kubernetes-alpha/issues/69) | kubernetes-alpha (archived) | Closed | Initial KubeVirt support request |
+| [#215](https://github.com/hashicorp/terraform-provider-kubernetes-alpha/issues/215) | kubernetes-alpha (archived) | Closed | KubeVirt webhook doesn't support dry-run |
+
+#### Maintainer Response Pattern
+
+Across these issues, HashiCorp maintainers consistently:
+1. Suggest `computed_fields` workaround (does not fully resolve complex CRDs)
+2. Reference "backlog item to improve UX" but no architectural fix scheduled
+3. Tag issues as "upstream-terraform" / "progressive apply" - awaiting SDK changes
+4. Close issues when workarounds are provided, even if root cause unaddressed
+
+#### Architectural Blockers
+
+Two issues are tagged as blocking architectural improvements:
+- **Progressive Apply** - Would allow dependencies to resolve before schema validation
+- **Upstream Terraform SDK** - Required changes for dynamic schema handling
+
+These have been in the backlog since the `kubernetes_manifest` resource was merged from the kubernetes-alpha provider in 2021.
 
 ### Pattern Recognition
 
 This issue appears with CRDs that have:
 - Deeply nested optional structures (3+ levels)
 - Extensive use of default values in OpenAPI schema
-- Admission webhooks that modify resources
+- Admission webhooks that modify resources (e.g., kubemacpool)
 - Controllers that add computed fields dynamically
+- Type conversions by API server (e.g., `{}` to `null`)
 
 ## Recommendations
 
@@ -1228,7 +1266,7 @@ resource "kubectl_manifest" "virtual_machine" {
 
 ---
 
-**Document Version**: 1.1
+**Document Version**: 1.2
 **Last Updated**: December 2025
 **Testing Performed By**: Repository maintainer with live OpenShift cluster access
 **Provider Source Analysis**: Verified against terraform-provider-kubernetes v3.0.1 source code
