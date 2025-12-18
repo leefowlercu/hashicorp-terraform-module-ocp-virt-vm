@@ -179,7 +179,17 @@ The provider's type validator:
 
 ### Why computed_fields Doesn't Fully Solve This
 
-The `computed_fields` attribute has limitations:
+**Critical Finding**: Debug logging (see Test 5) revealed that `computed_fields` **cannot fix this bug** because the error occurs during **type conversion in the apply phase**, not during planning.
+
+The type mismatch observed in `TF_LOG=TRACE`:
+```
+# User's HCL:       "masquerade": tftypes.Object[]         (empty object)
+# CRD schema:       "masquerade": tftypes.DynamicPseudoType
+```
+
+`computed_fields` only affects what fields are marked as "unknown" during planning - it does **not** change how `ToTFValue` converts types during apply. Even marking the entire `spec.template` as computed still runs the same buggy type conversion code.
+
+Additionally, `computed_fields` has practical limitations:
 
 1. **No wildcard support**: Cannot use `spec.template.spec.domain.*` to mark all nested fields
 2. **Cannot penetrate lists**: Cannot mark `spec.template.spec.volumes[*].containerDisk` as computed
@@ -198,6 +208,8 @@ computed_fields = [
   "spec.template.spec.volumes",            # Too broad - loses drift detection
 ]
 ```
+
+**Tested and Failed** (December 2025): We tested exhaustive computed_fields configurations including marking 40+ individual paths and even the entire `spec.template` - all failed with the same error. See Test 5 for full details.
 
 ## Reproduction Steps
 
@@ -474,6 +486,54 @@ resource "kubectl_manifest" "virtual_machine" {
 **Apply Time**: 1 second
 **Drift Detection**: None (subsequent `terraform plan` shows no changes)
 **Conclusion**: kubectl provider handles identical manifest without issues
+
+### Test 5: Debug Logging Analysis (TF_LOG=TRACE)
+
+To identify the exact cause of the type validation failure, we ran terraform with `TF_LOG=TRACE` to capture the provider's internal type conversion.
+
+**Command:**
+```bash
+TF_LOG=TRACE terraform apply -auto-approve 2>&1 | tee tf-debug.log
+```
+
+**Key Finding - Type Mismatch in Debug Log:**
+
+The debug log revealed the exact type mismatch in the `[ApplyResourceChange][Apply]` trace:
+
+```
+# Type in user's HCL manifest:
+"interfaces":tftypes.Tuple[tftypes.Object["masquerade":tftypes.Object[], ...]]
+
+# Type in CRD schema (object):
+"interfaces":tftypes.Tuple[tftypes.Object["masquerade":tftypes.DynamicPseudoType, ...]]
+```
+
+**Analysis:**
+- User provides `masquerade = {}` in HCL → converted to `tftypes.Object[]` (empty object type)
+- CRD schema defines `masquerade` as `tftypes.DynamicPseudoType` (flexible type)
+- The `mapToTFObjectValue` function (line 264) uses `nv.Type()` which preserves the **actual value's type** instead of using the **schema type**
+- Terraform SDK validation compares types and fails with "incorrect object attributes"
+
+**Why This Proves computed_fields Cannot Fix the Issue:**
+
+`computed_fields` only affects the **planning phase** - it tells Terraform to mark certain fields as "unknown" during plan. However:
+
+1. The type mismatch occurs during the **apply phase** in the type conversion code
+2. `computed_fields` does not change how `ToTFValue` converts types
+3. Even marking `spec.template` as fully computed still runs the same type conversion code
+4. The bug is in the conversion pipeline, not in what fields are considered computed
+
+**Tested computed_fields Configurations (All Failed):**
+
+| Configuration | Fields Marked | Result |
+|---------------|---------------|--------|
+| None | 0 | ❌ Failed |
+| Minimal | 2 (metadata.generation, status) | ❌ Failed |
+| Exhaustive field-level | 40+ individual paths | ❌ Failed |
+| Aggressive parent-level | domain.devices, domain.firmware, etc. | ❌ Failed |
+| Most aggressive | Entire spec.template | ❌ Failed |
+
+**Conclusion**: The `computed_fields` workaround suggested in GitHub issues works for **simple type mismatches** (like `[]` vs `null`, or controller-added annotations), but **cannot fix** the fundamental type conversion bug where `tftypes.Object[]` doesn't match `tftypes.DynamicPseudoType`. This requires a provider code fix.
 
 ## Expected vs Actual Behavior
 
@@ -1266,7 +1326,7 @@ resource "kubectl_manifest" "virtual_machine" {
 
 ---
 
-**Document Version**: 1.2
+**Document Version**: 1.3
 **Last Updated**: December 2025
 **Testing Performed By**: Repository maintainer with live OpenShift cluster access
 **Provider Source Analysis**: Verified against terraform-provider-kubernetes v3.0.1 source code
